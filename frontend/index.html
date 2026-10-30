@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ML Predictor</title>
+<style>
+  :root {
+    --bg: #f3f5f2; --card: #ffffff; --ink: #1d2a24; --muted: #5b6b63;
+    --line: #d5ddd7; --accent: #2f6f55; --accent-ink: #ffffff; --result: #e4f0e9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151b18; --card: #1e2723; --ink: #e8efea; --muted: #9db0a5;
+      --line: #33423b; --accent: #5fb592; --accent-ink: #0e1713; --result: #243a2f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 2rem 1rem; background: var(--bg); color: var(--ink);
+         font-family: Georgia, "Times New Roman", serif; line-height: 1.5; }
+  main { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 2rem; margin: 0 0 .25rem; }
+  .sub { color: var(--muted); margin: 0 0 2rem; }
+  section { background: var(--card); border: 1px solid var(--line);
+            border-radius: 6px; padding: 1.5rem; margin-bottom: 1.5rem; }
+  h2 { margin: 0 0 .25rem; font-size: 1.25rem; }
+  section > p { margin: 0 0 1rem; color: var(--muted); font-size: .95rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; }
+  label { display: block; font-size: .9rem; font-family: system-ui, sans-serif; }
+  input { width: 100%; margin-top: .25rem; padding: .5rem; font-size: 1rem;
+          border: 1px solid var(--line); border-radius: 4px;
+          background: var(--bg); color: var(--ink); }
+  input:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button { margin-top: 1rem; padding: .6rem 1.2rem; font-size: 1rem; cursor: pointer;
+           background: var(--accent); color: var(--accent-ink);
+           border: none; border-radius: 4px; font-family: system-ui, sans-serif; }
+  .result { margin-top: 1rem; padding: .75rem 1rem; background: var(--result);
+            border-radius: 4px; font-size: 1.1rem; min-height: 1.5rem; }
+  .result:empty { display: none; }
+  .error { color: #b3261e; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ML Predictor</h1>
+  <p class="sub">Two scikit-learn models served by a FastAPI backend.</p>
+
+  <section>
+    <h2>House value</h2>
+    <p>Linear regression trained on California housing data.</p>
+    <form id="reg-form">
+      <div class="grid">
+        <label>Median income (in $10,000s)
+          <input type="number" step="any" name="med_inc" value="5" required></label>
+        <label>House age (years)
+          <input type="number" step="any" name="house_age" value="20" required></label>
+        <label>Average rooms
+          <input type="number" step="any" name="ave_rooms" value="6" required></label>
+        <label>Average occupants
+          <input type="number" step="any" name="ave_occup" value="3" required></label>
+      </div>
+      <button type="submit">Predict price</button>
+    </form>
+    <div class="result" id="reg-result"></div>
+  </section>
+
+  <section>
+    <h2>Iris species</h2>
+    <p>Logistic regression classifier. Measurements are in centimetres.</p>
+    <form id="clf-form">
+      <div class="grid">
+        <label>Sepal length
+          <input type="number" step="any" name="sepal_length" value="5.1" required></label>
+        <label>Sepal width
+          <input type="number" step="any" name="sepal_width" value="3.5" required></label>
+        <label>Petal length
+          <input type="number" step="any" name="petal_length" value="1.4" required></label>
+        <label>Petal width
+          <input type="number" step="any" name="petal_width" value="0.2" required></label>
+      </div>
+      <button type="submit">Predict species</button>
+    </form>
+    <div class="result" id="clf-result"></div>
+  </section>
+</main>
+
+<script>
+  const API_URL = "http://127.0.0.1:8000";
+
+  // Reads a form, POSTs it as JSON to the endpoint, then calls showResult()
+  function setupForm(formId, resultId, endpoint, showResult) {
+    const form = document.getElementById(formId);
+    const resultBox = document.getElementById(resultId);
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();                       // stop the page from reloading
+
+      // Turn the form fields into {name: number} pairs
+      const data = {};
+      for (const [key, value] of new FormData(form).entries()) {
+        data[key] = parseFloat(value);
+      }
+
+      try {
+        const response = await fetch(API_URL + endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        if (!response.ok) throw new Error("Server returned " + response.status);
+        const result = await response.json();
+        resultBox.classList.remove("error");
+        resultBox.textContent = showResult(result);
+      } catch (err) {
+        resultBox.classList.add("error");
+        resultBox.textContent = "Request failed: " + err.message +
+          ". Is the backend running on " + API_URL + "?";
+      }
+    });
+  }
+
+  setupForm("reg-form", "reg-result", "/predict/regression", (r) =>
+    "Predicted value: $" + r.predicted_value_usd.toLocaleString());
+
+  setupForm("clf-form", "clf-result", "/predict/classification", (r) =>
+    "Species: " + r.species + " (confidence " + (r.confidence * 100).toFixed(1) + "%)");
+</script>
+</body>
+</html>
